@@ -5,14 +5,14 @@ from .models import *
 from .schemas import *
 from .common import *
 from .security import current,allow
-from . import consignment_service as consignment,fit_service as fit,fitting_service as fitting,sale_service as sale,return_service as returns,settlement_service as settlement
+from . import consignment_service as consignment,fit_service as fit,fitting_service as fitting,sale_service as sale,return_service as returns,settlement_service as settlement,exchange_service as exchange
 router=APIRouter()
 def change(u,action,fn,supervisor=False):
  allow(u,*(['supervisor'] if supervisor else ['operator','supervisor']))
  with Session() as s:x=fn(s);audit(s,u,action,x);s.commit();return dump(x)
 @router.get('/register')
 def register(u=Depends(current)):
- with Session() as s:return {n:[dump(x) for x in rows(s,c)] for n,c in [('consignors',Consignor),('agreements',Agreement),('amendments',Amendment),('garments',Garment),('measurements',Measurement),('profiles',FitProfile),('assessments',FitAssessment),('fittings',Fitting),('sales',Sale),('returns',Return),('payouts',Payout),('withdrawals',Withdrawal),('clock',Shop)]}
+ with Session() as s:return {n:[dump(x) for x in rows(s,c)] for n,c in [('consignors',Consignor),('agreements',Agreement),('amendments',Amendment),('garments',Garment),('measurements',Measurement),('profiles',FitProfile),('assessments',FitAssessment),('fittings',Fitting),('sales',Sale),('returns',Return),('exchanges',Exchange),('clawbacks',Clawback),('payouts',Payout),('withdrawals',Withdrawal),('clock',Shop)]}
 @router.get('/audit')
 def audits(u=Depends(current)):
  with Session() as s:return [dump(x) for x in rows(s,Audit)]
@@ -44,6 +44,11 @@ def cancel(id:int,u=Depends(current)):return change(u,'取消试衣',lambda s:fi
 def sales(d:SaleIn,u=Depends(current)):return change(u,'试衣成交',lambda s:sale.sell(s,d.model_dump()))
 @router.post('/returns')
 def ret(d:ReturnIn,u=Depends(current)):return change(u,'适配退货',lambda s:returns.request(s,d.model_dump()))
+@router.get('/exchanges/candidates')
+def exchange_candidates(sale_id:int,profile_id:int|None=None,u=Depends(current)):
+ with Session() as s:return exchange.candidates(s,{'sale_id':sale_id,'profile_id':profile_id})
+@router.post('/exchanges')
+def exchanges(d:ExchangeIn,u=Depends(current)):return change(u,'换货成交',lambda s:exchange.confirm(s,d.model_dump()),True)
 @router.post('/returns/{id}/inspect')
 def inspect(id:int,d:InspectionIn,u=Depends(current)):return change(u,'退衣复检',lambda s:returns.inspect(s,id,d.model_dump()),True)
 @router.post('/payouts')

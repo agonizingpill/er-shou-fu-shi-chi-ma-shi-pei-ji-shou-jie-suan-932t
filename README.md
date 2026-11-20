@@ -25,8 +25,8 @@ docker compose up -d --build --wait
 2. **实测与适配**：Measurement记录胸围、肩宽、衣长、弹性和版型；未实测不能推荐，实测后unmeasured→listed。FitProfile用匿名编号；FitAssessment经worker真实计算，queued→ready/failed，失败可重新提交新评估。
 3. **预约与排他留衣**：Fitting约定买家、衣物、试衣位1/2和至多2小时时段。只有listed可约，预约使衣物held；一衣一客和同位时段不重叠，取消释放为listed。有效协议结束前才可安排。
 4. **成交与佣金**：只有当前留衣在预约时间内成交，价格≥底价。Sale按当时佣金万分比四舍五入到分，保存成交、佣金、应付金额与七天退货截止，衣物sold，预约completed。
-5. **退货与复检**：七天内未结算订单可退，Sale returned、衣物inspection；pending退货必须店长记检查结果，relist恢复listed，retire产生交还凭据。寄售期已满不可复上架。原已退销售不能结算。
-6. **期满与结算**：成交七天退货期结束且寄售期届满才能Payout，保存支付参考号和应付金额，Sale settled。未售期满Withdrawal使衣物withdrawn并取消有效预约，保留取衣原因。两类资源写操作先锁Shop，再锁Garment，防止同衣或同试衣位并发争用。
+5. **退货与复检**：七天内未结算订单可退，Sale returned、衣物inspection；尺码偏紧可换货：候选只取在架、实测且模型判为“合身”的替换款，按合身概率降序（同概率按差价）；确认时重锁Shop与Garment，替换款已被买走则返回409且原单不动。换货生成新Sale（按替换款协议佣金快照、当前价、七天新退货期），原单未结算置exchanged停付，已结算保留原Payout并生成Clawback待后续抵扣；原单产生换货退回Return待复检；重复确认按原单唯一Exchange幂等返回。pending退货必须店长记检查结果，relist恢复listed，retire产生交还凭据。寄售期已满不可复上架。原已退销售不能结算。
+6. **期满与结算**：成交七天退货期结束且寄售期届满才能Payout，保存支付参考号和应付金额，Sale settled；若寄售方尚有待扣换货回款，先按最早记录抵扣，Payout另记clawback_cents。未售期满Withdrawal使衣物withdrawn并取消有效预约，保留取衣原因。两类资源写操作先锁Shop，再锁Garment，防止同衣或同试衣位并发争用。
 
 ## 一天的工作剧本
 
@@ -38,6 +38,7 @@ docker compose up -d --build --wait
 6. 买家反馈肩部活动偏紧，七天内退回；外套隔离为待复检，不能直接预约或结算。
 7. 店长检查领口、接缝、纽扣及尺寸，确认品相恢复上架；重新预约再成交，旧退货记录保留。
 8. 退货期未满结算返回409；期限都结束后支付寄售人，保存PAY凭据。G033期满未售针织衫取回，系统留撤回回执。
+9. 若买家在退货页选“换货”，先按P031体型筛出模型判为合身的在售款并显示合身概率与差价；店长确认后原单回到待复检、替换款成交，退货页并列新旧订单与差价，重复提交不重复换货或扣款。
 
 Shop演示时钟从2026-11-18开始，仅店长可单向推进并留审计，便于重现试衣时间、七天退货和到期，不依赖机器日期。
 
@@ -49,7 +50,7 @@ worker通过Redis BLPOP读取实际FitAssessment，结果持久化。Redis短暂
 
 ## 结构、枚举与开发
 
-backend/src/models.py为寄售关系模型，schemas.py严格字段校验与非有限值拒绝；consignment_service、fit_service、fitting_service、sale_service、return_service、settlement_service分别封装六领域规则。routes.py做JWT权限，common.py做父锁/审计，fit_model/worker负责计算。middlewares.py有RequestTrace及Recovery。
+backend/src/models.py为寄售关系模型，schemas.py严格字段校验与非有限值拒绝；consignment_service、fit_service、fitting_service、sale_service、return_service、settlement_service分别封装六领域规则，exchange_service单独处理换货候选、幂等确认与换货退回。routes.py做JWT权限，common.py做父锁/审计，fit_model/worker负责计算。middlewares.py有RequestTrace及Recovery。
 
 frontend/src/pages六页独立业务任务，components/tailor.js含衣物吊牌、状态、标题/表单等共享组件，utils/api.js做请求/会话/store、utils/format.js做转义/数据类型。角色、服饰状态、适配类别枚举在backend/src/constants.py；前端角色/状态在frontend/src/constants.js，算法标签与展示文案对应。
 
@@ -64,6 +65,6 @@ seed自然键补缺，已有佣金修订、状态与结算/退货完整保留。
 
 ## 已知边界
 
-单店两试衣位，匿名体型不含真实身份；合成样本不代表真实尺码适配质量。实测只录一次，未做历史测量修订。所有金额为整数分、仅同一模拟币种，无支付网关、退货退款外部调用或电子合同。需要显式取消过期留衣或期满撤回来释放，未做自动预约到时任务。Shop全店父锁优先小规模正确性，吞吐有限。BLPOP弹出任务后被强杀仍不自动重投，短暂Redis断线可恢复；没有生产迁移和多店隔离。
+单店两试衣位，匿名体型不含真实身份；合成样本不代表真实尺码适配质量。实测只录一次，未做历史测量修订。所有金额为整数分、仅同一模拟币种，无支付网关、退货退款外部调用或电子合同。需要显式取消过期留衣或期满撤回来释放，未做自动预约到时任务。Shop全店父锁优先小规模正确性，吞吐有限。BLPOP弹出任务后被强杀仍不自动重投，短暂Redis断线可恢复；没有生产迁移（旧卷由seed的幂等upgrade补齐换货所需列）和多店隔离。换货差价只记账，不接支付网关补收或退款；一笔换货在寄售方后续结算中按序抵扣，未扣完余额保留。
 
 License: MIT（本项目新增源码）。

@@ -2,9 +2,18 @@ from src.database import Base,engine,Session
 from src.models import *
 from src.security import password_hash
 from src.common import rows
+from sqlalchemy import text
+
+def upgrade():
+ # 旧卷升级：换货需要销售可无预约、结算增加追扣列；本地无迁移工具，按需幂等补齐
+ with engine.begin() as x:
+  if engine.dialect.name=='postgresql':
+   x.execute(text('ALTER TABLE sales ALTER COLUMN fitting_id DROP NOT NULL'))
+   x.execute(text('ALTER TABLE payouts ADD COLUMN IF NOT EXISTS clawback_cents INTEGER NOT NULL DEFAULT 0'))
 
 def seed():
  Base.metadata.create_all(engine)
+ upgrade()
  with Session() as s:
   for r in ['operator','supervisor','viewer']:
    if not any(u.email==r+'@hesheng.local' for u in rows(s,User)):s.add(User(email=r+'@hesheng.local',password=password_hash('Fit2026!'),role=r))

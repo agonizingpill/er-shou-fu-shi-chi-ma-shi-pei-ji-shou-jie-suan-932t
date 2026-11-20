@@ -33,13 +33,19 @@ class Fitting(Base):
  id=Column(Integer,primary_key=True);garment_id=Column(Integer,ForeignKey('garments.id'),nullable=False);profile_id=Column(Integer,ForeignKey('profiles.id'),nullable=False);slot=Column(Integer,nullable=False);starts=Column(String(32),nullable=False);ends=Column(String(32),nullable=False);state=Column(String(20),default='reserved',nullable=False)
 class Sale(Base):
  __tablename__='sales'
- id=Column(Integer,primary_key=True);fitting_id=Column(Integer,ForeignKey('fittings.id'),unique=True,nullable=False);garment_id=Column(Integer,ForeignKey('garments.id'),nullable=False);price_cents=Column(Integer,nullable=False);commission_bp=Column(Integer,nullable=False);commission_cents=Column(Integer,nullable=False);net_cents=Column(Integer,nullable=False);sold_at=Column(String(32),nullable=False);return_deadline=Column(String(32),nullable=False);state=Column(String(20),default='completed',nullable=False)
+ id=Column(Integer,primary_key=True);fitting_id=Column(Integer,ForeignKey('fittings.id'),unique=True,nullable=True);garment_id=Column(Integer,ForeignKey('garments.id'),nullable=False);price_cents=Column(Integer,nullable=False);commission_bp=Column(Integer,nullable=False);commission_cents=Column(Integer,nullable=False);net_cents=Column(Integer,nullable=False);sold_at=Column(String(32),nullable=False);return_deadline=Column(String(32),nullable=False);state=Column(String(20),default='completed',nullable=False)
 class Return(Base):
  __tablename__='returns'
  id=Column(Integer,primary_key=True);sale_id=Column(Integer,ForeignKey('sales.id'),unique=True,nullable=False);reason=Column(String(500),nullable=False);state=Column(String(20),default='pending',nullable=False);inspection=Column(String(500),default='');outcome=Column(String(20),default='')
+class Exchange(Base):
+ __tablename__='exchanges'
+ id=Column(Integer,primary_key=True);sale_id=Column(Integer,ForeignKey('sales.id'),unique=True,nullable=False);profile_id=Column(Integer,ForeignKey('profiles.id'),nullable=False);replacement_garment_id=Column(Integer,ForeignKey('garments.id'),nullable=False);replacement_sale_id=Column(Integer,ForeignKey('sales.id'),unique=True,nullable=True);original_price_cents=Column(Integer,nullable=False);replacement_price_cents=Column(Integer,nullable=False);difference_cents=Column(Integer,nullable=False);fit_probability=Column(Float,default=0,nullable=False);reason=Column(String(500),nullable=False);state=Column(String(20),default='completed',nullable=False);created_at=Column(String(32),nullable=False)
 class Payout(Base):
  __tablename__='payouts'
- id=Column(Integer,primary_key=True);sale_id=Column(Integer,ForeignKey('sales.id'),unique=True,nullable=False);consignor_id=Column(Integer,ForeignKey('consignors.id'),nullable=False);amount_cents=Column(Integer,nullable=False);reference=Column(String(60),unique=True,nullable=False);paid_at=Column(String(32),nullable=False)
+ id=Column(Integer,primary_key=True);sale_id=Column(Integer,ForeignKey('sales.id'),unique=True,nullable=False);consignor_id=Column(Integer,ForeignKey('consignors.id'),nullable=False);amount_cents=Column(Integer,nullable=False);clawback_cents=Column(Integer,default=0,nullable=False);reference=Column(String(60),unique=True,nullable=False);paid_at=Column(String(32),nullable=False)
+class Clawback(Base):
+ __tablename__='clawbacks'
+ id=Column(Integer,primary_key=True);exchange_id=Column(Integer,ForeignKey('exchanges.id'),unique=True,nullable=False);consignor_id=Column(Integer,ForeignKey('consignors.id'),nullable=False);amount_cents=Column(Integer,nullable=False);remaining_cents=Column(Integer,nullable=False);created_at=Column(String(32),nullable=False)
 class Withdrawal(Base):
  __tablename__='withdrawals'
  id=Column(Integer,primary_key=True);garment_id=Column(Integer,ForeignKey('garments.id'),unique=True,nullable=False);reason=Column(String(500),nullable=False);returned_at=Column(String(32),nullable=False)

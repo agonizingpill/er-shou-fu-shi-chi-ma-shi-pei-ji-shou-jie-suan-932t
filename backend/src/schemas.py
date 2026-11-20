@@ -23,6 +23,8 @@ class SaleIn(Input):
  fitting_id:int;price_cents:int=Field(gt=0,le=10000000)
 class ReturnIn(Input):
  sale_id:int;reason:str=Field(min_length=8,max_length=500)
+class ExchangeIn(Input):
+ sale_id:int;replacement_garment_id:int;profile_id:int|None=None;price_cents:int|None=Field(default=None,gt=0,le=10000000);reason:str=Field(min_length=8,max_length=500)
 class InspectionIn(Input):
  outcome:Literal['relist','retire'];inspection:str=Field(min_length=8,max_length=500)
 class PayoutIn(Input):
